@@ -62,19 +62,6 @@ class DwtDct:
 
         return scores
 
-    def diffuse_dct_svd(self, block, wmBit, scale):
-        u,s,v = np.linalg.svd(cv2.dct(block))
-
-        s[0] = (s[0] // scale + 0.25 + 0.5 * wmBit) * scale
-        return cv2.idct(np.dot(u, np.dot(np.diag(s), v)))
-
-    def infer_dct_svd(self, block, scale):
-        u,s,v = np.linalg.svd(cv2.dct(block))
-        score = 0
-        score = int ((s[0] % scale) > scale * 0.5)
-        return score
-
-
     def diffuse_dct_matrix(self, block, wmBit, scale):
         pos = np.argmax(abs(block.flatten()[1:])) + 1
         i, j = pos // self._block, pos % self._block
