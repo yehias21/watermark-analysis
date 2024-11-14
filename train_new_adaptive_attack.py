@@ -12,39 +12,49 @@ import logging
 # import wandb
 import pandas as pd
 from PIL import Image
+from concurrent.futures import ThreadPoolExecutor
 from torchvision import transforms
- 
-def load_attack_dataset(path):
 
+def load_single_image(image_path, transform):
+    img = Image.open(image_path)
+    return transform(img)
+
+def load_attack_dataset(path, num_workers=24):
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize((512, 512), antialias=True)
+    ])
+    
     # Load CSV file
     csv_file = os.path.join(path, 'messages.csv')
     data = pd.read_csv(csv_file)
-
-    # Set paths for image folders
-    no_watermark_dir = os.path.join(path, 'no_watermark')
-    watermark_dir = os.path.join(path, 'watermark')
-    inverse_watermark_dir = os.path.join(path, 'inverse_watermark')
-
-    no_watermark_images = []
-    watermark_images = []
-    inverse_watermark_images = []
-
-    for _, row in data.iterrows():
-        index = row['index']
-
-        # Load images
-        no_watermark = Image.open(os.path.join(no_watermark_dir, f'data_{index}.png'))
-        watermark_img = Image.open(os.path.join(watermark_dir, f'data_{index}.png'))
-        inverse_watermark_img = Image.open(os.path.join(inverse_watermark_dir, f'data_{index}.png'))
-
-        no_watermark_images.append(no_watermark)
-        watermark_images.append(watermark_img)
-        inverse_watermark_images.append(inverse_watermark_img)
-
-    no_watermark = torch.stack([transforms.ToTensor()(img) for img in no_watermark_images])
-    watermark_images = torch.stack([transforms.ToTensor()(img) for img in watermark_images])
-    inverse_watermark_images = torch.stack([transforms.ToTensor()(img) for img in inverse_watermark_images])
-    messages = torch.tensor(list(map(lambda x: eval(x), data['message'])))
+    
+    # Prepare image paths
+    no_watermark_paths = [os.path.join(path, 'no_watermark', f'data_{idx}.png') for idx in data['index']]
+    watermark_paths = [os.path.join(path, 'watermark', f'data_{idx}.png') for idx in data['index']]
+    inverse_watermark_paths = [os.path.join(path, 'inverse_watermark', f'data_{idx}.png') for idx in data['index']]
+    
+    # Parallel loading function
+    def load_image_set(paths):
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            images = list(tqdm(
+                executor.map(lambda p: load_single_image(p, transform), paths),
+                total=len(paths),
+                desc="Loading images"
+            ))
+        return torch.stack(images)
+    
+    print("Loading no watermark images...")
+    no_watermark = load_image_set(no_watermark_paths)
+    
+    print("Loading watermark images...")
+    watermark_images = load_image_set(watermark_paths)
+    
+    print("Loading inverse watermark images...")
+    inverse_watermark_images = load_image_set(inverse_watermark_paths)
+    
+    messages = torch.tensor([eval(m) for m in data['message']])
+    
     return no_watermark, watermark_images, inverse_watermark_images, messages
 
 
@@ -87,90 +97,89 @@ def save_sample_images(x_wm, recon_x, epoch, run_dir):
         pbar.update(1)
         
         
-def train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=1, cache_dir='cache/attack_dataset_rivagan', mode='inverse_watermark'):
+def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, alpha=1, beta=1, 
+                            cache_dir='cache/attack_dataset_rivagan', mode='inverse_watermark'):
     # Initialize logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-
+    
     # Create directory for this training run
     run_dir = create_run_directory()
-    logger.info(f"Training outputs will be saved to: {run_dir}")
-
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"Using device: {device}")
-
-
+    
     # Load attack dataset
     logger.info("Loading attack dataset...")
     no_watermark, watermark_images, inverse_watermark_images, messages = load_attack_dataset(cache_dir)
     logger.info("Attack dataset loaded.")
+    if mode == 'inverse_watermark':
+        target_images = inverse_watermark_images
+    elif mode == 'no_watermark':
+        target_images = no_watermark
+        
+    # Normalize images 
+    watermark_images = watermark_images.float() * 2 - 1.0
+    target_images = target_images.float() * 2 - 1.0
     
-    # Normalize images
-    with tqdm(total=3, desc="Preparing dataset") as pbar:    
-        no_watermark = no_watermark.to(device).float() * 2 - 1.0
-        watermark_images = watermark_images.to(device).float() * 2 - 1.0
-        inverse_watermark_images = inverse_watermark_images.to(device).float() * 2 - 1.0
-        pbar.update(1)
-        if watermark_images.size(-1) != 768 or watermark_images.size(-2) != 768:
-            watermark_images = nn.functional.interpolate(watermark_images, (768, 768), mode='bilinear')
-            inverse_watermark_images = nn.functional.interpolate(inverse_watermark_images, (768, 768), mode='bilinear')
-            no_watermark = nn.functional.interpolate(no_watermark, (768, 768), mode='bilinear')
-        pbar.update(1)
-        # Create DataLoader
-        dataset = TensorDataset(no_watermark, watermark_images, inverse_watermark_images)
-        train_size = int(0.75 * len(dataset))
-        val_size = len(dataset) - train_size
-        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-        pbar.update(1)
-        
-        with tqdm(total=1, desc="Initializing model") as pbar:
-            # Initialize model
-            vae = AutoencoderKL.from_pretrained(
-                "stabilityai/stable-diffusion-xl-refiner-1.0",
-                subfolder="vae",
-                torch_dtype=torch.float32
-            ).to(device)
-            pbar.update(1)
-            optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
-            # lpips_loss = lpips.LPIPS(net='alex').to(device)
-            pbar.update(1)
-            mse_loss = nn.MSELoss()  
-            pbar.update(1)
+    # Create DataLoader
+    dataset = TensorDataset(watermark_images, target_images)
+    train_size = int(0.75 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True,
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False,
+    )
+    
+    # Initialize model with gradient checkpointing
+    vae = AutoencoderKL.from_pretrained(
+        "stabilityai/stable-diffusion-xl-refiner-1.0",
+        subfolder="vae",
+        torch_dtype=torch.float32
+    ).to(device)
+    vae.enable_gradient_checkpointing()
+    
+    optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
+    mse_loss = nn.MSELoss()
 
-        best_val_loss = float('inf')
-        best_epoch = 0
-        train_losses = []
-        val_losses = []
-        
-        # Initialize W&B
-        # wandb.init(project='new_adaptive-attack', name='new_adaptive-attack')
-        # wandb.watch(vae)
-        
-        # Training loop
-        for epoch in trange(num_epochs, desc="Training"):
-            vae.train()
-            train_loss = 0.0
-            train_pbar = tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{num_epochs}", 
-                         leave=False, position=1)    
-            for orig_batch, wm_batch, inv_wm_batch in train_loader:
-                    
-                optimizer.zero_grad()
-                latents = vae.encode(wm_batch).latent_dist.sample()
-                recon_x = vae.decode(latents).sample
-                if mode == 'inverse_watermark':
-                    # loss = alpha * lpips_loss(recon_x, inv_wm_batch).mean() +  beta * mse_loss(recon_x, inv_wm_batch)
-                    loss = mse_loss(recon_x, inv_wm_batch)
-                elif mode == 'no_watermark':
-                    # loss = alpha * lpips_loss(recon_x, orig_batch).mean() + beta * mse_loss(recon_x, orig_batch)
-                    loss = mse_loss(recon_x, orig_batch)
-                    
-                loss.backward()
-                optimizer.step()
-                train_loss += loss.item() * wm_batch.size(0) 
-                train_pbar.set_postfix({'loss': f"{loss.item():.4f}"})
+    best_val_loss = float('inf')
+    best_epoch = 0
+    train_losses = []
+    val_losses = []
+    
+    # Initialize W&B
+    # wandb.init(project='new_adaptive-attack', name='new_adaptive-attack')
+    # wandb.watch(vae)
+    
+    # Training loop
+
+    for epoch in trange(num_epochs, desc="Training"):
+        vae.train()
+        train_loss = 0.0
+        train_pbar = tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{num_epochs}", 
+                        leave=False, position=1)    
+        for wm_batch, target_images in train_pbar:  
+            target_images = target_images.to(device)
+            wm_batch = wm_batch.to(device)
+            optimizer.zero_grad()
+            latents = vae.encode(wm_batch).latent_dist.sample()
+            recon_x = vae.decode(latents).sample
+            # loss = alpha * lpips_loss(recon_x, inv_wm_batch).mean() +  beta * mse_loss(recon_x, inv_wm_batch)
+            loss = mse_loss(recon_x, target_images)
+
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item() * wm_batch.size(0) 
+            train_pbar.set_postfix({'loss': f"{loss.item():.4f}"})
 
         avg_train_loss = train_loss / len(train_loader.dataset)
         train_losses.append(avg_train_loss)
@@ -179,10 +188,12 @@ def train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, al
         vae.eval()
         val_loss = 0.0
         val_pbar = tqdm(val_loader, desc=f"Validation Epoch {epoch+1}/{num_epochs}", 
-                       leave=False, position=1)
+                        leave=False, position=1)
         
         with torch.no_grad():
-            for orig_batch, wm_batch, inv_wm_batch in val_loader:
+            for wm_batch, target_images in val_pbar:  
+                wm_batch = wm_batch.to(device)
+                target_images = target_images.to(device)
                 latents = vae.encode(wm_batch).latent_dist.sample()
                 recon_x = vae.decode(latents).sample
                 

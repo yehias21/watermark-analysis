@@ -7,7 +7,7 @@ from watermarks.Trw import Trw
 
 class TrwStableDiffusion:
 
-    def __init__(self, model=  "stabilityai/stable-diffusion-2",num_inference_steps = 20,guidance_scale= 7.5, channel=3, pattern='ring', mask_skape='circle', injection_type='complex', image_size=64,x_offset=0, y_offset=0):
+    def __init__(self, model=  "stabilityai/stable-diffusion-2",num_inference_steps = 20,guidance_scale= 7.5, channel=3, height=512, width=512, pattern='ring', mask_skape='circle', injection_type='complex', image_size=64,x_offset=0, y_offset=0):
         self.pipe  = ModifiedStableDiffusionPipeline.from_pretrained(
             model,
             scheduler=DDIMScheduler.from_pretrained(model, subfolder='scheduler'),
@@ -24,6 +24,8 @@ class TrwStableDiffusion:
         self.pipe.enable_xformers_memory_efficient_attention()
         self.num_inference_steps = num_inference_steps
         self.guidance_scale = guidance_scale
+        self.height = height
+        self.width = width
 
     def generate(self,
                  prompts: List[str],
@@ -40,7 +42,7 @@ class TrwStableDiffusion:
             messages =  torch.repeat_interleave(self.trw.get_message().to(self.device).unsqueeze(0), len(prompts), dim=0)
             
             latents= self.trw._inject_watermark(latents, messages)
-        return self.pipe(prompt=prompts, latents=latents,guidance_scale = self.guidance_scale, num_inference_steps=self.num_inference_steps).images
+        return self.pipe(prompt=prompts, latents=latents,guidance_scale = self.guidance_scale, num_inference_steps=self.num_inference_steps, height=self.height, width=self.width).images
 
 
     def generate_image_latent_pair(self, prompts: List[str], watermark= True, messages= None):

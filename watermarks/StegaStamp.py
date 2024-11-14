@@ -8,7 +8,7 @@ class StegaStamp:
     def __init__(self):
         self.model =  onnxruntime.InferenceSession('watermarks/stega_stamp.onnx')
         self.resize_down = transforms.Resize((400, 400))
-        self.resize_up = transforms.Resize((768, 768))
+        self.resize_up = transforms.Resize((512, 512))
         
     def encode(self, images, messages):
         images = torch.stack([transforms.ToTensor()(img) for img in images])

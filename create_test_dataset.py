@@ -16,7 +16,6 @@ def create_test_dataset(number_of_samples: int, batch_size: int, cache_dir: str,
     else:
         print(watermark_algorthim)
         generator = PostProccessingWatermarksStableDiffusion(watermark_algorthim=watermark_algorthim)
-        print(type(generator.watermark_key))
     tqdm_bar = tqdm.tqdm(range(number_of_samples // batch_size), desc="Generating Test Dataset")
     data_acc = []
     image_index = 0
@@ -44,4 +43,8 @@ def create_test_dataset(number_of_samples: int, batch_size: int, cache_dir: str,
     print('Test Dataset Created')
 
 if __name__ == "__main__":
-    create_test_dataset(1024, 16, 'cache', 'stegastamp')
+    torch.manual_seed(444)
+    torch.cuda.manual_seed(444)
+    torch.cuda.manual_seed_all(444)
+    create_test_dataset(1024, 16, 'cache', 'rivagan')
+    

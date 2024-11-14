@@ -48,4 +48,7 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     print('Attack Dataset Created')
 
 if __name__ == "__main__":
+    torch.manual_seed(123)
+    torch.cuda.manual_seed(123)
+    torch.cuda.manual_seed_all(123)
     create_attack_dataset(1024, 16, 'cache', 'stegastamp')
