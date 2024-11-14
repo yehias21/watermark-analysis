@@ -16,9 +16,9 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     os.makedirs(cache_dir_watermark, exist_ok=True)
     os.makedirs(cache_dir_inverse_watermark, exist_ok=True)
     if watermark_algorthim == 'trw':
-        wm = TrwStableDiffusion()
+        generator = TrwStableDiffusion()
     else:
-        wm = PostProccessingWatermarksStableDiffusion(watermark_algorthim=watermark_algorthim)
+        generator = PostProccessingWatermarksStableDiffusion(watermark_algorthim=watermark_algorthim)
     tqdm_bar = tqdm.tqdm(range(number_of_samples // batch_size), desc="Generating Attack Dataset")
     data_acc = []
     image_index = 0
@@ -26,8 +26,13 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     for batch in tqdm_bar:
         print(f'Batch {batch + 1}/{number_of_samples // batch_size}')
         prompts = [next(prompt_iterator) for _ in range(batch_size)]
-        messages = torch.randint(0, 2, (len(prompts), 32)).float()
-        images_no_watermarked, images_watermarked, images_inverse_watermarked = wm.generate_triplet(prompts, messages)
+        if watermark_algorthim == 'trw':
+            messages =   generator.trw.set_message(generator.trw.sample_message(1)[0])
+        elif watermark_algorthim == 'rivagan':
+            messages = torch.randint(0, 2, (len(prompts), 32)).float()
+        elif watermark_algorthim == 'stegastamp':
+            messages = torch.randint(0, 2, (len(prompts), 100)).float()
+        images_no_watermarked, images_watermarked, images_inverse_watermarked = generator.generate_triplet(prompts, messages)
 
         for i, (image_no_watermark, image_watermark, image_inverse_watermark, prompt, message) in enumerate(
                 zip(images_no_watermarked, images_watermarked, images_inverse_watermarked, prompts, messages)):
@@ -43,4 +48,4 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     print('Attack Dataset Created')
 
 if __name__ == "__main__":
-    create_attack_dataset(1024, 16, 'cache', 'trw')
+    create_attack_dataset(1024, 16, 'cache', 'stegastamp')

@@ -2,7 +2,7 @@ from typing import Tuple, List
 import torch
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 from watermarks.Rivagan import RivaGan
-
+from watermarks.StegaStamp import StegaStamp
 
 class PostProccessingWatermarksStableDiffusion:
 
@@ -10,8 +10,7 @@ class PostProccessingWatermarksStableDiffusion:
         self.pipe  = StableDiffusionPipeline.from_pretrained(
             model,
             torch_dtype=torch.float16,
-            variant="fp16"
-            ,
+            variant="fp16",
         )
         self.pipe.scheduler = DPMSolverMultistepScheduler.from_config(self.pipe.scheduler.config)
         self.num_inference_steps = num_inference_steps
@@ -21,14 +20,14 @@ class PostProccessingWatermarksStableDiffusion:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.pipe = self.pipe.to(self.device)
         self.pipe.enable_xformers_memory_efficient_attention()
-        #seed everything
         torch.manual_seed(333)
         torch.cuda.manual_seed(333)
         torch.cuda.manual_seed_all(333)
         
         if watermark_algorthim == 'rivagan':
             self.watermark_key = RivaGan()
-
+        elif watermark_algorthim == 'stegastamp':
+            self.watermark_key = StegaStamp()
 
     def generate(self,
                  prompts: List[str],
@@ -37,7 +36,10 @@ class PostProccessingWatermarksStableDiffusion:
         images = self.pipe(prompt=prompts,guidance_scale = self.guidance_scale, num_inference_steps=self.num_inference_steps).images
         if watermark:
             if messages is None:
-                messages = torch.randint(0, 2, (len(prompts), 32)).float()
+                if isinstance(self.watermark_key, RivaGan):
+                    messages = torch.randint(0, 2, (len(prompts), 32)).float()
+                elif isinstance(self.watermark_key, StegaStamp):
+                    messages = torch.randint(0, 2, (len(prompts), 100)).float()
             wm_images = self.watermark_key.encode(images,messages)
             return wm_images
         return images
@@ -50,7 +52,10 @@ class PostProccessingWatermarksStableDiffusion:
                  messages):
         images = self.pipe(prompt=prompts,guidance_scale = self.guidance_scale, num_inference_steps=self.num_inference_steps).images
         if messages is None:
-            messages = torch.randint(0, 2, (len(prompts), 32)).float()
+            if isinstance(self.watermark_key, RivaGan):
+                messages = torch.randint(0, 2, (len(prompts), 32)).float()
+            elif isinstance(self.watermark_key, StegaStamp):
+                messages = torch.randint(0, 2, (len(prompts), 100)).float()
         inverse_messages = 1 - messages
         wm_images = self.watermark_key.encode(images,messages)
         inverse_wm_images = self.watermark_key.encode(images,inverse_messages)

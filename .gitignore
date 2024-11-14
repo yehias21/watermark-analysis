@@ -3,3 +3,5 @@ data/
 .idea
 __pycache__
 cache/
+training_runs
+wandb/

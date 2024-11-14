@@ -35,8 +35,10 @@ class TrwStableDiffusion:
         latents =  self.pipe.get_random_latents(batch_size=len(prompts)).to(self.device)
         if watermark:
             if messages is None: 
-                messages =  torch.repeat_interleave(self.wm_key.get_message().unsqueeze(0), len(prompts), dim=0)
+                self.trw.set_message()
             self.trw.set_message(messages)
+            messages =  torch.repeat_interleave(self.trw.get_message().to(self.device).unsqueeze(0), len(prompts), dim=0)
+            
             latents= self.trw._inject_watermark(latents, messages)
         return self.pipe(prompt=prompts, latents=latents,guidance_scale = self.guidance_scale, num_inference_steps=self.num_inference_steps).images
 
