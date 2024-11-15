@@ -21,7 +21,6 @@ def create_test_dataset(number_of_samples: int, batch_size: int, cache_dir: str,
     image_index = 0
 
     for batch in tqdm_bar:
-        print(f'Batch {batch + 1}/{number_of_samples // batch_size}')
         prompts = [next(prompt_iterator) for _ in range(batch_size)]
         if watermark_algorthim == 'trw':
             messages =   generator.trw.set_message(generator.trw.sample_message(1)[0])
@@ -43,8 +42,8 @@ def create_test_dataset(number_of_samples: int, batch_size: int, cache_dir: str,
     print('Test Dataset Created')
 
 if __name__ == "__main__":
-    torch.manual_seed(444)
-    torch.cuda.manual_seed(444)
-    torch.cuda.manual_seed_all(444)
-    create_test_dataset(1024, 16, 'cache', 'rivagan')
+    torch.manual_seed(101)
+    torch.cuda.manual_seed(101)
+    torch.cuda.manual_seed_all(101)
+    create_test_dataset(1024, 16, 'cache', 'stegastamp')
     

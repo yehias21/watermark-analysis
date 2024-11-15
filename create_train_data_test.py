@@ -24,7 +24,6 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     image_index = 0
 
     for batch in tqdm_bar:
-        print(f'Batch {batch + 1}/{number_of_samples // batch_size}')
         prompts = [next(prompt_iterator) for _ in range(batch_size)]
         if watermark_algorthim == 'trw':
             messages =   generator.trw.set_message(generator.trw.sample_message(1)[0])

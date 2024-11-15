@@ -219,6 +219,17 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
             best_epoch = epoch
             torch.save(vae.state_dict(), os.path.join(run_dir, 'models', 'best_model.pth'))
             
+        with tqdm(total=1, desc="Updating plots", leave=False) as pbar:
+            plt.figure(figsize=(10, 5))
+            plt.plot(train_losses, label='Training Loss')
+            plt.plot(val_losses, label='Validation Loss')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.title('Training and Validation Losses')
+            plt.legend()
+            plt.savefig(os.path.join(run_dir, 'plots', 'loss_curves.png'))
+            plt.close()
+            pbar.update(1)
         # Log to console
         logger.info(f"Epoch {epoch+1}/{num_epochs}: Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
         
