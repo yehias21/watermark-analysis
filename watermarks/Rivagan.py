@@ -4,10 +4,13 @@ import torch
 from torchvision import transforms
 
 
-class RivaGan:
+class Rivagan:
     def __init__(self):
-        self.encoder =  onnxruntime.InferenceSession('watermarks/rivagan_encoder.onnx')
-        self.decoder =  onnxruntime.InferenceSession('watermarks/rivagan_decoder.onnx')
+        providers = [
+    ('CUDAExecutionProvider', {'device_id': 5}),  # Specify the GPU device ID
+    'CPUExecutionProvider']
+        self.encoder =  onnxruntime.InferenceSession('watermarks/rivagan_encoder.onnx', providers=providers)
+        self.decoder =  onnxruntime.InferenceSession('watermarks/rivagan_decoder.onnx', providers=providers)
 
     def encode(self, images, messages):
         images = torch.stack([transforms.ToTensor()(img) for img in images])
@@ -26,7 +29,9 @@ class RivaGan:
         return [to_pil(wm_images[i])  for i in range(wm_images.size(0))]
 
     def decode(self, images):
-        images = torch.stack([transforms.ToTensor(img) for img in images])
+        images = torch.stack([transforms.ToTensor()(img) for img in images])
+        images = (images - 0.5) * 2
+        images = torch.clamp(images,-1.0, 1.0)
         images = images.unsqueeze(2)
         inputs = {
             'frame': images.detach().cpu().numpy(),

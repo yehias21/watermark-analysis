@@ -8,7 +8,7 @@ class Trw:
     """
     The TRW watermarking key. Can be used to generate watermarked images and to extract the watermark.
     """
-    def __init__(self,reversal_inference_steps = 20, channel=3, pattern='ring', mask_shape='circle', injection_type='complex',radius=10 , image_size=64,x_offset=0, y_offset=0):
+    def __init__(self,reversal_inference_steps = 20, channel=-1, pattern='ring', mask_shape='circle', injection_type='complex',radius=10 , image_size=64 ,x_offset=0, y_offset=0):
         self.reversal_inference_steps = reversal_inference_steps
         self.channel = channel
         self.pattern = pattern
@@ -45,14 +45,6 @@ class Trw:
             raise ValueError(self.pattern)
         return message
 
-    def randomize_configuration(self):
-        """ Sample random set of hyperparameters """
-        self.x_offset = random.choice(list(range(-10, 10)))
-        self.y_offset = random.choice(list(range(-10, 10)))
-        self.radius = random.choice(list(range(7, 15)))
-        self.channel = random.choice(list(range(0,4)))
-        self.pattern = random.choice(["ring", "zeros", "random"])
-        self.mask_shape = random.choice(["square", "circle"])
     
     @torch.no_grad()
     def extract(self, x: torch.Tensor) -> torch.Tensor:

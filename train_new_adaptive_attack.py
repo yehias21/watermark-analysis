@@ -8,8 +8,8 @@ from diffusers import AutoencoderKL
 import matplotlib.pyplot as plt
 from datetime import datetime
 import logging
-# import lpips
-# import wandb
+import lpips
+import wandb
 import pandas as pd
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
@@ -147,7 +147,7 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
         torch_dtype=torch.float32
     ).to(device)
     vae.enable_gradient_checkpointing()
-    
+    lpips_loss = lpips.LPIPS(net='alex').to(device)
     optimizer = optim.Adam(vae.parameters(), lr=learning_rate)
     mse_loss = nn.MSELoss()
 
@@ -157,8 +157,17 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
     val_losses = []
     
     # Initialize W&B
-    # wandb.init(project='new_adaptive-attack', name='new_adaptive-attack')
-    # wandb.watch(vae)
+    wandb.init(project='new_adaptive-attack', name=f'config_alpha_{alpha}_beta_{beta}_mode_{mode}_dataset_{cache_dir}')
+    wandb.config.update({
+        'batch_size': batch_size,
+        'num_epochs': num_epochs,
+        'learning_rate': learning_rate,
+        'alpha': alpha,
+        'beta': beta,
+        'cache_dir': cache_dir,
+        'mode': mode
+    })
+    wandb.watch(vae)
     
     # Training loop
 
@@ -173,8 +182,7 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
             optimizer.zero_grad()
             latents = vae.encode(wm_batch).latent_dist.sample()
             recon_x = vae.decode(latents).sample
-            # loss = alpha * lpips_loss(recon_x, inv_wm_batch).mean() +  beta * mse_loss(recon_x, inv_wm_batch)
-            loss = mse_loss(recon_x, target_images)
+            loss = alpha * lpips_loss(recon_x, target_images).mean() +  beta * mse_loss(recon_x, target_images)
 
             loss.backward()
             optimizer.step()
@@ -196,9 +204,7 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
                 target_images = target_images.to(device)
                 latents = vae.encode(wm_batch).latent_dist.sample()
                 recon_x = vae.decode(latents).sample
-                
-                # loss = alpha *lpips_loss(recon_x, wm_batch).mean() +  beta * mse_loss(recon_x, wm_batch)
-                loss = mse_loss(recon_x, wm_batch)
+                loss = alpha *lpips_loss(recon_x, target_images).mean() +  beta * mse_loss(recon_x, target_images)
                 val_loss += loss.item() * wm_batch.size(0)
                 val_pbar.set_postfix({'loss': f"{loss.item():.4f}"})
 
@@ -210,8 +216,8 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
 
 
         # Log to W&B
-        # wandb.log({'train_loss': avg_train_loss, 'val_loss': avg_val_loss})
-        # wandb.log({'epoch': epoch+1})
+        wandb.log({'train_loss': avg_train_loss, 'val_loss': avg_val_loss})
+        wandb.log({'epoch': epoch+1})
         
         # Save model if validation loss improved
         if avg_val_loss < best_val_loss:
@@ -238,4 +244,4 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
     return train_losses, val_losses
 
 if __name__ == "__main__":
-    train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=1, cache_dir='cache/attack_dataset_rivagan', mode='inverse_watermark')
+    train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=0, cache_dir='cache/attack_dataset_stegastamp', mode='inverse_watermark')

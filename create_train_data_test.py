@@ -18,7 +18,7 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     if watermark_algorthim == 'trw':
         generator = TrwStableDiffusion()
     else:
-        generator = PostProccessingWatermarksStableDiffusion(watermark_algorthim=watermark_algorthim)
+        generator = PostProccessingWatermarksStableDiffusion(model= "sd-legacy/stable-diffusion-v1-5", watermark_algorthim=watermark_algorthim)
     tqdm_bar = tqdm.tqdm(range(number_of_samples // batch_size), desc="Generating Attack Dataset")
     data_acc = []
     image_index = 0
@@ -26,7 +26,12 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     for batch in tqdm_bar:
         prompts = [next(prompt_iterator) for _ in range(batch_size)]
         if watermark_algorthim == 'trw':
-            messages =   generator.trw.set_message(generator.trw.sample_message(1)[0])
+            generator.trw.set_message(generator.trw.sample_message(1)[0])
+            messages = torch.repeat_interleave(
+            generator.trw.get_message().to(generator.device).unsqueeze(0), 
+            len(prompts), 
+            dim=0
+        )
         elif watermark_algorthim == 'rivagan':
             messages = torch.randint(0, 2, (len(prompts), 32)).float()
         elif watermark_algorthim == 'stegastamp':
@@ -47,7 +52,7 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     print('Attack Dataset Created')
 
 if __name__ == "__main__":
-    torch.manual_seed(123)
-    torch.cuda.manual_seed(123)
-    torch.cuda.manual_seed_all(123)
-    create_attack_dataset(1024, 16, 'cache', 'stegastamp')
+    torch.manual_seed(1111)
+    torch.cuda.manual_seed(1111)
+    torch.cuda.manual_seed_all(1111)
+    create_attack_dataset(1024, 16, 'cache', 'trw')
