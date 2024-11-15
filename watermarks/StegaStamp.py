@@ -6,7 +6,10 @@ from torchvision import transforms
 
 class StegaStamp:
     def __init__(self):
-        self.model =  onnxruntime.InferenceSession('watermarks/stega_stamp.onnx')
+        providers = [
+    ('CUDAExecutionProvider', {'device_id': 5}),  # Specify the GPU device ID
+    'CPUExecutionProvider']
+        self.model =  onnxruntime.InferenceSession('watermarks/stega_stamp.onnx', providers=providers)
         self.resize_down = transforms.Resize((400, 400))
         self.resize_up = transforms.Resize((512, 512))
         
@@ -24,12 +27,12 @@ class StegaStamp:
         return [to_pil(wm_images[i])  for i in range(wm_images.size(0))]
 
     def decode(self, images):
-        images = torch.stack([transforms.ToTensor(img) for img in images])
-        images = images.unsqueeze(2)
+        images = torch.stack([transforms.ToTensor()(img) for img in images])
         inputs = {
-            'image': self.resize_down(images).permute(0, 2, 3, 1).detach().cpu().numpy()
+            'image': self.resize_down(images).permute(0, 2, 3, 1).detach().cpu().float().numpy(),
+            "secret": np.zeros((len(images), 100), dtype=np.float32)
         }
-        outputs = self.decoder.run(None, inputs)
-        messages = outputs[0]
+        outputs = self.model.run(None, inputs)
+        messages = outputs[2]
         messages = (messages > 0.5).astype(np.uint8)
         return messages

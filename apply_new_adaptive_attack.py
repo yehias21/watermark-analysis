@@ -10,15 +10,18 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Autoencode images using a fine-tuned VAE.")
     parser.add_argument("--input_folder", type=str, required=True, help="Path to the input folder containing images.")
     parser.add_argument("--output_folder", type=str, required=True, help="Path to the output folder to save reconstructed images.")
-    parser.add_argument("--vae_path", type=str, default="fine_tuned_vae", help="Path to the fine-tuned VAE model.")
+    parser.add_argument("--vae_path", type=str, required=True, help="Path to the fine-tuned VAE model.")
     return parser.parse_args()
 
+@torch.no_grad()
 def main():
     args = parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Load the fine-tuned VAE
-    vae = AutoencoderKL.from_pretrained(args.vae_path).to(device)
+    vae = AutoencoderKL.from_pretrained("stabilityai/stable-diffusion-xl-refiner-1.0", subfolder="vae", torch_dtype=torch.float32)
+    vae.load_state_dict(torch.load(args.vae_path))
+    vae.to(device)
     vae.eval()
 
     # Create output directory if it doesn't exist
