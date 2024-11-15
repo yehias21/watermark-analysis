@@ -43,16 +43,6 @@ class VAEEmbedding(BaseEncoder):
         return self.model.encode(images).latent_dist.mode()
 
 
-class KLVAEEmbedding(BaseEncoder):
-    def __init__(self, model_name):
-        super().__init__()
-        self.model = AutoencoderKL.from_pretrained(model_name)
-
-    def forward(self, images):
-        images = 2.0 * images - 1.0
-        return self.model.encode(images).latent_dist.sample()
-
-
 class ResNet18Embedding(BaseEncoder):
     def __init__(self, layer):
         super().__init__()
