@@ -38,5 +38,4 @@ class Rivagan:
         }
         outputs = self.decoder.run(None, inputs)
         messages = outputs[0]
-        messages = (messages > 0.5).astype(np.uint8)
         return messages

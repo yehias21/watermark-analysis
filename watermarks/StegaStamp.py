@@ -34,5 +34,4 @@ class StegaStamp:
         }
         outputs = self.model.run(None, inputs)
         messages = outputs[2]
-        messages = (messages > 0.5).astype(np.uint8)
         return messages
