@@ -3,6 +3,7 @@ import torch
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 from watermarks.Rivagan import Rivagan
 from watermarks.StegaStamp import StegaStamp
+from watermarks.DwtDct import DwtDCT
 
 class PostProccessingWatermarksStableDiffusion:
 
@@ -26,6 +27,10 @@ class PostProccessingWatermarksStableDiffusion:
         
         if watermark_algorthim == 'rivagan':
             self.watermark_key = Rivagan()
+        elif watermark_algorthim == 'dwtdct':
+            self.watermark_key = DwtDCT(use_svd=False)
+        elif watermark_algorthim == 'dwtdct':
+            self.watermark_key = DwtDCT(use_svd=True)
         elif watermark_algorthim == 'stegastamp':
             self.watermark_key = StegaStamp()
 
@@ -36,7 +41,7 @@ class PostProccessingWatermarksStableDiffusion:
         images = self.pipe(prompt=prompts,guidance_scale = self.guidance_scale, num_inference_steps=self.num_inference_steps, height=self.height, width=self.width).images
         if watermark:
             if messages is None:
-                if isinstance(self.watermark_key, Rivagan):
+                if isinstance(self.watermark_key, Rivagan) or isinstance(self.watermark_key, DwtDCT):
                     messages = torch.randint(0, 2, (len(prompts), 32)).float()
                 elif isinstance(self.watermark_key, StegaStamp):
                     messages = torch.randint(0, 2, (len(prompts), 100)).float()
@@ -52,7 +57,7 @@ class PostProccessingWatermarksStableDiffusion:
                  messages):
         images = self.pipe(prompt=prompts,guidance_scale = self.guidance_scale, num_inference_steps=self.num_inference_steps).images
         if messages is None:
-            if isinstance(self.watermark_key, Rivagan):
+            if isinstance(self.watermark_key, Rivagan) or isinstance(self.watermark_key, DwtDCT):
                 messages = torch.randint(0, 2, (len(prompts), 32)).float()
             elif isinstance(self.watermark_key, StegaStamp):
                 messages = torch.randint(0, 2, (len(prompts), 100)).float()

@@ -32,7 +32,7 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
             len(prompts), 
             dim=0
         )
-        elif watermark_algorthim == 'rivagan':
+        elif watermark_algorthim == 'rivagan' or watermark_algorthim == 'dwtdct' or watermark_algorthim == 'dwtdctsvd':
             messages = torch.randint(0, 2, (len(prompts), 32)).float()
         elif watermark_algorthim == 'stegastamp':
             messages = torch.randint(0, 2, (len(prompts), 100)).float()

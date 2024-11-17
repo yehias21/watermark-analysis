@@ -4,10 +4,10 @@ from PIL import Image
 import pywt
 
 
-class WatermarkEmbedder:
-    def __init__(self, scales=[0, 36, 36], block=4, use_svd=False):
-        self._scales = scales
-        self._block = block
+class DwtDCT:
+    def __init__(self, use_svd=False):
+        self._scales = [0, 36, 36]
+        self._block = 4
         self._use_svd = use_svd
 
     def encode(self, images, watermarks):

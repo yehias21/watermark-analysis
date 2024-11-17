@@ -1,5 +1,6 @@
 from watermarks.Rivagan import Rivagan
 from watermarks.StegaStamp import StegaStamp
+from watermarks.DwtDct import DwtDCT
 from PIL import Image
 import os
 import torch
@@ -22,6 +23,10 @@ class WatermarkDecoder:
             return Rivagan()
         elif self.watermark_algorithm == 'stegastamp':
             return StegaStamp()
+        elif self.watermark_algorithm == 'dwtdct':
+            return DwtDCT(use_svd=False)
+        elif self.watermark_algorithm == 'dwtdctsvd':
+            return DwtDCT(use_svd=True)
 
     @staticmethod
     def load_single_image(image_path):
