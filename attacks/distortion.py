@@ -1,56 +1,28 @@
-import random
+import os
+from pathlib import Path
+from tqdm import tqdm
+from PIL import Image
 from PIL import Image, ImageFilter, ImageEnhance
-import torchvision.transforms as T
-import torchvision.transforms.functional as F
-import numpy as np
+from torchvision import transforms
 import torch
 import io
+import argparse
 
-from utils import set_random_seed, to_tensor, to_pil
-
-class ImageDistortion(torch.nn.Module):
-    def __init__(self, distortion_type, same_operation=False, relative_strength=True, return_image=True):
-        super(ImageDistortion, self).__init__()
-        self.distortion_type = distortion_type
-        self.same_operation = same_operation
-        self.relative_strength = relative_strength
-        self.return_image = return_image
-        # Parameters for distortion strength
+class DistortionAttacks():
+    def __init__(self):
+        super(DistortionAttacks, self).__init__()
+        
         self.distortion_strength_params = {
-            "rotation": (0, 45),
-            "resizedcrop": (1, 0.5),
-            "erasing": (0, 0.25),
-            "brightness": (1, 2),
-            "contrast": (1, 2),
-            "blurring": (0, 20),
-            "noise": (0, 0.1),
-            "compression": (90, 10),
+            "rotation": 25,
+            "resizedcrop": .5,
+            "erasing": 0.25,
+            "brightness": .6,
+            "contrast": 0.8,
+            "blurring": 7,
+            "noise":  0.1,
+            "compression": 80,
         }
-
-    def relative_strength_to_absolute(self, strength):
-        assert 0 <= strength <= 1
-        min_val, max_val = self.distortion_strength_params[self.distortion_type]
-        return min(max(strength * (max_val - min_val) + min_val, min_val), max_val)
-
-    def forward(self, image, strength=None):
-        # Convert image to PIL image if it is a tensor
-        if not isinstance(image, Image.Image):
-            image = to_pil([image])[0]
-        # Convert strength if relative
-        if self.relative_strength:
-            strength = self.relative_strength_to_absolute(strength)
-        # Set the random seed for consistency
-        set_random_seed(0 if self.same_operation else random.randint(0, 10000))
-        # Get distortion parameters
-        min_val, max_val = self.distortion_strength_params[self.distortion_type]
-        strength = strength if strength is not None else random.uniform(min_val, max_val)
-        # Apply the appropriate distortion
-        distorted_image = self.apply_distortion(image, strength)
-        # Convert to tensor if needed
-        return to_tensor([distorted_image])[0] if not self.return_image else distorted_image
-
-    def apply_distortion(self, image, strength):
-        distortion_methods = {
+        self.distortion_methods = {
             "rotation": self.apply_rotation,
             "resizedcrop": self.apply_resizedcrop,
             "erasing": self.apply_erasing,
@@ -60,35 +32,89 @@ class ImageDistortion(torch.nn.Module):
             "noise": self.apply_noise,
             "compression": self.apply_compression,
         }
-        if self.distortion_type not in distortion_methods:
-            raise ValueError("Unsupported distortion type")
-        return distortion_methods[self.distortion_type](image, strength)
 
-    def apply_rotation(self, image, strength):
-        return F.rotate(image, strength)
+    def process_single_image(self, image, distortion_type):
+        return  self.distortion_methods[distortion_type](image, self.distortion_strength_params[distortion_type])
 
-    def apply_resizedcrop(self, image, strength):
-        i, j, h, w = T.RandomResizedCrop.get_params(image, scale=(strength, strength), ratio=(1, 1))
-        return F.resized_crop(image, i, j, h, w, image.size)
+    def apply_rotation(self, image, params = 25):
+        return  transforms.functional.rotate(image, params)
 
-    def apply_erasing(self, image, strength):
-        i, j, h, w, v = T.RandomErasing.get_params(to_tensor([image]), scale=(strength, strength), ratio=(1, 1), value=[0])
-        return to_pil(F.erase(to_tensor([image], norm_type=None), i, j, h, w, v), norm_type=None)[0]
+    def apply_resizedcrop(self, image, params=0.5):
+        image = transforms.ToTensor()(image)
+        i, j, h, w = transforms.RandomResizedCrop.get_params(image, scale=(params,params), ratio=(1, 1))
+        image = transforms.functional.resized_crop(image, i, j, h, w, image.size()[1:])
+        image = transforms.ToPILImage()(image)
+        return image
 
-    def apply_brightness(self, image, strength):
-        return ImageEnhance.Brightness(image).enhance(strength)
+    def apply_erasing(self, image, params = 0.25):
+        image = transforms.ToTensor()(image)
+        i, j, h, w, v = transforms.RandomErasing.get_params(image, scale=(params,params), ratio=(1, 1), value=None)
+        transforms.functional.erase(image, i, j, h, w, v)
+        image = transforms.ToPILImage()(image)
+        return image
+    
 
-    def apply_contrast(self, image, strength):
-        return ImageEnhance.Contrast(image).enhance(strength)
+    def apply_brightness(self, image, params = 1):
+        return ImageEnhance.Brightness(image).enhance(params)
 
-    def apply_blurring(self, image, strength):
-        return image.filter(ImageFilter.GaussianBlur(int(strength)))
+    def apply_contrast(self, image, params = 0.8):
+        return ImageEnhance.Contrast(image).enhance(params)
 
-    def apply_noise(self, image, strength):
-        noise = torch.randn(to_tensor([image]).size()) * strength
-        return to_pil((to_tensor([image]) + noise).clamp(0, 1), norm_type=None)[0]
+    def apply_blurring(self, image, params = 7):
+        return image.filter(ImageFilter.GaussianBlur(params))
 
-    def apply_compression(self, image, strength):
+    def apply_noise(self, image, params = 0.1):
+        image = transforms.ToTensor()(image)
+        noise = torch.randn_like(image) * params
+        image = (image + noise).clamp(0, 1)
+        image = transforms.ToPILImage()(image)
+        return image
+
+
+    def apply_compression(self, image, params = 80):
         buffered = io.BytesIO()
-        image.save(buffered, format="JPEG", quality=int(strength))
+        image.save(buffered, format="JPEG", quality=params)
         return Image.open(buffered)
+
+    def process_directory(self, input_dir, output_dir):
+        input_dirname = os.path.basename(os.path.normpath(input_dir))
+        image_files = []
+        valid_extensions = {'.jpg', '.jpeg', '.png', '.bmp'}
+        for ext in valid_extensions:
+            image_files.extend(list(Path(input_dir).glob(f'*{ext}')))
+
+        print(f"Found {len(image_files)} images to process")
+        
+        # Process each image
+        for img_path in tqdm(image_files, desc="Processing images"):
+            # Load image
+            img = Image.open(img_path)
+            img_name = img_path.stem
+            
+            # Process with each distortion type
+            for dist_type in self.distortion_strength_params.keys():
+                # Create output directory with format: /output_dir/input_dirname_transformation_name
+                dist_dir = os.path.join(output_dir, f"{input_dirname}_{dist_type}")
+                os.makedirs(dist_dir, exist_ok=True)
+                
+                # Apply distortion
+                distorted = self.process_single_image(img, dist_type)
+                
+                # Save distorted image
+                save_path = os.path.join(dist_dir, f"{img_name}.png")
+                distorted.save(save_path)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Apply image distortions')
+    parser.add_argument('--input_dir', type=str, required=True, help='Input directory containing images')
+    parser.add_argument('--output_dir', type=str, required=True, help='Output directory for distorted images')
+    
+    args = parser.parse_args()
+    
+    processor = DistortionAttacks()
+    processor.process_directory(args.input_dir, args.output_dir)
+    print("Processing complete!")
+
+if __name__ == "__main__":
+    main()
