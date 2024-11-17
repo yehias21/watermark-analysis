@@ -29,7 +29,7 @@ class PostProccessingWatermarksStableDiffusion:
             self.watermark_key = Rivagan()
         elif watermark_algorthim == 'dwtdct':
             self.watermark_key = DwtDCT(use_svd=False)
-        elif watermark_algorthim == 'dwtdct':
+        elif watermark_algorthim == 'dwtdctsvd':
             self.watermark_key = DwtDCT(use_svd=True)
         elif watermark_algorthim == 'stegastamp':
             self.watermark_key = StegaStamp()
