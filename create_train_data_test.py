@@ -52,7 +52,7 @@ def create_attack_dataset(number_of_samples: int, batch_size: int, cache_dir: st
     print('Attack Dataset Created')
 
 if __name__ == "__main__":
-    torch.manual_seed(1111)
-    torch.cuda.manual_seed(1111)
-    torch.cuda.manual_seed_all(1111)
-    create_attack_dataset(1024, 16, 'cache', 'trw')
+    torch.manual_seed(69)
+    torch.cuda.manual_seed(69)
+    torch.cuda.manual_seed_all(69)
+    create_attack_dataset(1024, 16, 'cache', 'dwtdct')

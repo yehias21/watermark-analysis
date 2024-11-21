@@ -7,6 +7,8 @@ from skimage.metrics import structural_similarity, peak_signal_noise_ratio, norm
 from torchvision import transforms
 from pytorch_fid import fid_score
 from concurrent.futures import ThreadPoolExecutor
+import argparse
+import pandas as pd
 
 class ImageComparator:
     ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
@@ -101,7 +103,7 @@ class ImageComparator:
         valid_results = 0
         for result in results:
             if result:
-                valid_results += 1
+                valid_results += 1 
                 for metric, value in result.items():
                     aggregate_metrics[metric].append(value)
         
@@ -122,13 +124,17 @@ class ImageComparator:
         
         return mean_metrics
 
-def main():
-    # Example usage
-    folder1 = "cache/test_dataset_rivagan"
-    folder2 = "cache/test_dataset_rivagan"
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Compare images in two folders using various metrics')
+    parser.add_argument('--ref_folder', type=str, help='Path to ref folder containing images')
+    parser.add_argument('--target_folder', type=str, help='Path to target folder containing images')
     
-    comparator = ImageComparator(folder1, folder2)
-    metrics = comparator.run_comparison(num_threads=4)
+    args = parser.parse_args()
+    
+    comparator = ImageComparator(args.ref_folder, args.target_folder)
+    metrics = comparator.run_comparison(num_threads=24)
     
     print("\nMetrics Summary:")
     print("-" * 50)
@@ -137,6 +143,8 @@ def main():
             print(f"{metric}: {value:.4f}")
         else:
             print(f"{metric}: Failed to calculate")
+    # save csv
 
-if __name__ == "__main__":
-    main()
+    metrics_df = pd.DataFrame(metrics, index=[0])
+    metrics_df.to_csv(os.path.join('./quality', f"{'_'.join(args.target_folder.split('/')[-2:])}_metrics.csv"), index=False)
+

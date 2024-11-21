@@ -7,7 +7,7 @@ from torchvision import transforms
 class Rivagan:
     def __init__(self):
         providers = [
-    ('CUDAExecutionProvider', {'device_id': 5}),  # Specify the GPU device ID
+    ('CUDAExecutionProvider', {'device_id': 0}),  # Specify the GPU device ID
     'CPUExecutionProvider']
         self.encoder =  onnxruntime.InferenceSession('watermarks/rivagan_encoder.onnx', providers=providers)
         self.decoder =  onnxruntime.InferenceSession('watermarks/rivagan_decoder.onnx', providers=providers)

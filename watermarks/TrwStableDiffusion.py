@@ -5,6 +5,7 @@ from diffusers import DDIMInverseScheduler, DDIMScheduler
 from watermarks.ModifiedStableDiffusionPipeline import ModifiedStableDiffusionPipeline
 from watermarks.Trw import Trw
 from torchvision import transforms
+
 class TrwStableDiffusion:
 
     def __init__(self, model=  "stabilityai/stable-diffusion-2",num_inference_steps = 20,guidance_scale= 7.5, channel=3, height=512, width=512, pattern='ring', mask_shape='circle', injection_type='complex', radius=10, image_size=64, x_offset=0, y_offset=0):
@@ -12,13 +13,13 @@ class TrwStableDiffusion:
             model,
             scheduler=DDIMScheduler.from_pretrained(model, subfolder='scheduler'),
             torch_dtype=torch.float16,
-            variant="fp16"
+            variant="fp16",
         )
 
         self.pipe.inverse_scheduler = DDIMInverseScheduler.from_pretrained(model, subfolder='scheduler')
         self.pipe.requires_safety_checker = False
         self.pipe.set_progress_bar_config(disable=True)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device =  "cuda:7"# torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.trw = Trw(reversal_inference_steps=num_inference_steps, channel=channel, pattern= pattern, mask_shape=mask_shape, injection_type= injection_type, radius=radius, image_size= image_size, x_offset= x_offset, y_offset= y_offset)
         self.pipe.to(self.device)
         self.pipe.enable_xformers_memory_efficient_attention()

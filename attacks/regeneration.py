@@ -46,7 +46,7 @@ class generativeAttacks(ABC):
 
 class VAEAttack(generativeAttacks):
     def __init__(self, model=[], quality=1, metric="mse"):
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = []
         self.model_names = []
         for m in model:
@@ -71,7 +71,6 @@ class VAEAttack(generativeAttacks):
                     raise Exception("Invalid model name")
 
     def attack(self, dataloader, output_dir, preprocess=True):
-        os.makedirs(output_dir, exist_ok=True)
         for model, model_name in zip(self.model, self.model_names):
             model_output_dir = os.path.join(output_dir, model_name)
             os.makedirs(model_output_dir, exist_ok=True)
@@ -88,7 +87,7 @@ class VAEAttack(generativeAttacks):
 
 class DiffuserAttack:
     def __init__(self, model="stabilityai/stable-diffusion-xl-refiner-1.0"):
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.pipeline = DiffusionPipeline.from_pretrained(model
     , torch_dtype=torch.float16, variant="fp16", use_safetensors=True, 
 ).to(self.device)
@@ -104,8 +103,8 @@ class DiffuserAttack:
 
 
 # Example usage
-image_dir = "/ephemeral/yaya/projects/watermark-analysis/data/Neurips24_ETI_BlackBox"
-output_dir = "/ephemeral/yaya/projects/watermark-analysis/data/outout"
+image_dir = "/ephemeral/tbakr/watermark-analysis/cache/test_dataset_stegastamp"
+output_dir = "/ephemeral/tbakr/watermark-analysis/attacked/test_dataset_stegastamp"
 transform = transforms.Compose([
     transforms.Resize((512, 512)),
     transforms.ToTensor(),
@@ -114,8 +113,8 @@ dataset = ImageDataset(image_dir, transform=transform)
 dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
 
 # Initialize attack
-# vae_attack = VAEAttack(model=["bmshj2018_factorized", "cheng2020_anchor"], quality=1, metric="mse")
-# vae_attack.attack(dataloader, output_dir)
+vae_attack = VAEAttack(model=["bmshj2018_factorized", "cheng2020_anchor", "mbt2018","bmshj2018_hyperprior","mbt2018_mean"], quality=1, metric="mse")
+vae_attack.attack(dataloader, output_dir)
 
 diffuser_attack = DiffuserAttack(model="stabilityai/stable-diffusion-xl-refiner-1.0")
-diffuser_attack.attack(glob(image_dir+"/*.png"), output_dir, regen=1, prompt="")
+diffuser_attack.attack(glob(image_dir+"/*.png"), output_dir, regen=2, prompt="")

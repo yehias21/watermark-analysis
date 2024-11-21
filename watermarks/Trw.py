@@ -59,44 +59,19 @@ class Trw:
         return fft_latents  # this is the message [b, 4, 64, 64,]
 
     @torch.no_grad()
-    def verify(self, msg_pred: torch.Tensor, msg_true: torch.Tensor) -> dict:
+    def decode(self, msg_pred: torch.Tensor, msg_true: torch.Tensor,reversed_latents_no_w_fft) -> dict:
         """
         Extracts an embedded_message from images and computes a p-value for the confidence that the embedded
         and extracted messages are matching.
         """
-        results = {'accuracy': 0, 'p_values': [0,0,0]}
-
         # non-watermarked messages:
-        reversed_latents_no_w_fft = self.pipe.get_random_latents(batch_size=len(msg_pred))
-        reversed_latents_no_w_fft = torch.fft.fftshift(
-            torch.fft.fft2(reversed_latents_no_w_fft.to(self.device)), dim=(-1, -2)
-        )
+
  
         watermarking_mask = self.get_watermarking_mask(reversed_latents_no_w_fft)
 
         no_w_metric, w_metric = [], []
-        for i in range(reversed_latents_no_w_fft.size(0)):
-            no_w_metric.append(
-                torch.abs(
-                    reversed_latents_no_w_fft[i][watermarking_mask[i]]
-                    - msg_true[i][watermarking_mask[i]]
-                )
-                .mean()
-                .item()
-            )
-        for i in range(msg_pred.size(0)):
-            w_metric.append(
-                torch.abs(
-                    msg_pred[i][watermarking_mask[i]]
-                    - msg_true[i][watermarking_mask[i]]
-                )
-                .mean()
-                .item()
-            )
-
-        results['target'] = w_metric
-        results['null'] = no_w_metric
-        return results
+       
+        return no_w_metric, w_metric
     
     def set_message(self, msg: torch.Tensor):
         real_part = msg.real.float()

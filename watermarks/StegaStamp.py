@@ -7,7 +7,7 @@ from torchvision import transforms
 class StegaStamp:
     def __init__(self):
         providers = [
-    ('CUDAExecutionProvider', {'device_id': 5}),  # Specify the GPU device ID
+    ('CUDAExecutionProvider', {'device_id': 0}),  # Specify the GPU device ID
     'CPUExecutionProvider']
         self.model =  onnxruntime.InferenceSession('watermarks/stega_stamp.onnx', providers=providers)
         self.resize_down = transforms.Resize((400, 400))

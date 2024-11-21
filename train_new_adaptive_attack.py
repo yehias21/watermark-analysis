@@ -244,4 +244,9 @@ def train_new_adaptive_attack(batch_size=4, num_epochs=10, learning_rate=1e-5, a
     return train_losses, val_losses
 
 if __name__ == "__main__":
-    train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=0, cache_dir='cache/attack_dataset_stegastamp', mode='inverse_watermark')
+    # train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=0, beta=1, cache_dir='cache/attack_dataset_dwtdctsvd', mode='no_watermark')
+    # train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=0, beta=1, cache_dir='cache/attack_dataset_dwtdctsvd', mode='inverse_watermark')
+    # train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=1, cache_dir='cache/attack_dataset_dwtdctsvd', mode='no_watermark')
+    # train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=1, cache_dir='cache/attack_dataset_dwtdctsvd', mode='inverse_watermark')
+    train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=0, cache_dir='cache/attack_dataset_dwtdct', mode='no_watermark')
+    # train_new_adaptive_attack(batch_size=4,num_epochs=10, learning_rate=1e-5, alpha=1, beta=0, cache_dir='cache/attack_dataset_dwtdctsvd', mode='inverse_watermark')

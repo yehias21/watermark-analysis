@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from sklearn.metrics import roc_auc_score
 from scipy import stats
+import argparse
+
 
 class WatermarkDecoder:
     def __init__(self, watermark_algorithm='rivagan', batch_size=16, num_workers=24):
@@ -27,6 +29,7 @@ class WatermarkDecoder:
             return DwtDCT(use_svd=False)
         elif self.watermark_algorithm == 'dwtdctsvd':
             return DwtDCT(use_svd=True)
+
 
     @staticmethod
     def load_single_image(image_path):
@@ -118,11 +121,27 @@ class WatermarkDecoder:
         for metric_name, value in metrics.items():
             print(f"{metric_name.replace('_', ' ').title()}: {value:.4f}")
         
+        # save csv 
+        metrics_df = pd.DataFrame(metrics, index=[0])
+        metrics_df.to_csv(os.path.join('./performance', f"{'_'.join(images_path.split('/')[-2:])}_metrics.csv"), index=False)
+
         return metrics, correct_bits
 
 
 if __name__ == "__main__":
-    images_path = 'cache/test_dataset_stegastamp'
-    csv_path = 'cache/test_dataset_stegastamp'
-    decoder = WatermarkDecoder(watermark_algorithm='stegastamp')
-    decoder.test_decoding(images_path, csv_path)
+    parser = argparse.ArgumentParser(description='Test watermark decoding on images')
+    parser.add_argument('--images_path', type=str, required=True, help='Path to the images folder')
+    parser.add_argument('--csv_path', type=str, required=True, help='Path to the CSV folder')
+    parser.add_argument('--algorithm', type=str, required=True,
+                       choices=['rivagan', 'stegastamp', 'dwtdct', 'dwtdctsvd'],
+                       help='Watermark algorithm to use')
+
+    args = parser.parse_args()
+    
+    decoder = WatermarkDecoder(
+        watermark_algorithm=args.algorithm,
+        batch_size=16,
+        num_workers=24,
+    )
+    
+    metrics, correct_bits = decoder.test_decoding(args.images_path, args.csv_path)

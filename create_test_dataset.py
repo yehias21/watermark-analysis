@@ -42,7 +42,7 @@ def create_test_dataset(number_of_samples: int, batch_size: int, cache_dir: str,
     print('Test Dataset Created')
 
 if __name__ == "__main__":
-    torch.manual_seed(66)
-    torch.cuda.manual_seed(66)
-    torch.cuda.manual_seed_all(66)
-    create_test_dataset(1024, 16, 'cache', 'trw')
+    torch.manual_seed(99)
+    torch.cuda.manual_seed(99)
+    torch.cuda.manual_seed_all(99)
+    create_test_dataset(1024, 16, 'cache', 'dwtdctsvd')

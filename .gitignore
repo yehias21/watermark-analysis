@@ -6,3 +6,5 @@ cache/
 training_runs
 wandb/
 attacked
+performance
+quality

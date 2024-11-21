@@ -160,7 +160,7 @@ class DwtDCT:
         if val < 0:
             val = abs(val)
 
-        return int((val % scale) > 0.5 * scale)
+        return (val % scale)/ scale
 
     def diffuse_dct_svd(self, block, wmBit, scale):
         u, s, v = np.linalg.svd(cv2.dct(block))
@@ -169,4 +169,4 @@ class DwtDCT:
 
     def infer_dct_svd(self, block, scale):
         u, s, v = np.linalg.svd(cv2.dct(block))
-        return int((s[0] % scale) > scale * 0.5)
+        return (s[0] % scale) / scale 

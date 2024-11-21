@@ -10,11 +10,12 @@ from adv import (
     ClipEmbedding,
 )
 import os
+from tqdm import tqdm
 from glob import glob
 EPS_FACTOR = 1 / 255
 ALPHA_FACTOR = 0.05
 N_STEPS = 200
-BATCH_SIZE = 20
+BATCH_SIZE = 256
 class WarmupPGDEmbedding:
     def __init__(
         self,
@@ -65,7 +66,7 @@ class WarmupPGDEmbedding:
             assert False
 
         # PGD
-        for _ in range(self.steps):
+        for _ in tqdm(range(self.steps)):
             self.model.zero_grad()
             adv_images.requires_grad = True
             adv_embeddings = self.model(adv_images)
@@ -83,7 +84,7 @@ class WarmupPGDEmbedding:
 
         return adv_images
 def adv_emb_attack(
-    wm_img_path, encoder, strength, output_path, device=torch.device("cuda:0")
+    wm_img_path, encoder, strength, output_path, device=torch.device("cuda")
 ):
     # check if the file/directory paths exist
     os.makedirs(output_path, exist_ok=True)
@@ -97,11 +98,6 @@ def adv_emb_attack(
         embedding_model = ResNet18Embedding("last")
     elif encoder == "clip":
         embedding_model = ClipEmbedding()
-    elif encoder == "klvae8":
-        # same vae as used in generator
-        embedding_model = VAEEmbedding("stabilityai/sd-vae-ft-mse")
-    elif encoder == "sdxlvae":
-        embedding_model = VAEEmbedding("stabilityai/sdxl-vae")
     elif encoder == "klvae16":
         embedding_model = VAEEmbedding("MudeHui/vae-f16-c16")
     else:
@@ -114,7 +110,7 @@ def adv_emb_attack(
     transform = transforms.ToTensor()
     wm_dataset = SimpleImageFolder(wm_img_path, transform=transform)
     wm_loader = DataLoader(
-        wm_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True
+        wm_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=24, pin_memory=True
     )
     print("Data loaded!")
 
@@ -126,11 +122,13 @@ def adv_emb_attack(
         steps=N_STEPS,
         device=device,
     )
-
+    from tqdm import tqdm
     # Generate adversarial images
-    for i, (images, image_paths) in enumerate(wm_loader):
+    for i, (images, image_paths) in tqdm(enumerate(wm_loader)):
         images = images.to(device)
-
+        # shape
+        print(images.shape)
+        print(f"Processing batch {i+1}...")
         # PGD attack
         images_adv = attack.forward(images)
         # save images
@@ -164,5 +162,6 @@ class SimpleImageFolder(Dataset):
     def __len__(self):
         return len(self.filenames)
 
-for attack in ['klvae8', 'klvae16', 'resnet18', 'clip', 'sdxlvae']:
-    adv_emb_attack(f'/ephemeral/tbakr/watermark-analysis/cache/test_dataset_{watermark}', attack, 4, f'/ephemeral/tbakr/watermark-analysis/attacked/adverserial/{watermark}/{attack}')
+for attack in ['clip','resnet18']:	
+    for watermark in ['dwtdct']:
+        adv_emb_attack(f'/ephemeral/tbakr/watermark-analysis/cache/test_dataset_{watermark}', attack, 4, f'/ephemeral/tbakr/watermark-analysis/attacked/test_dataset_{watermark}_{attack}')
