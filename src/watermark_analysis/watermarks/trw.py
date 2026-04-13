@@ -1,0 +1,153 @@
+import copy
+
+import numpy as np
+import torch
+
+from ..config import (
+    TRW_CHANNEL as DEFAULT_CHANNEL,
+    TRW_IMAGE_SIZE as DEFAULT_IMAGE_SIZE,
+    TRW_INJECTION_TYPE as DEFAULT_INJECTION_TYPE,
+    TRW_MASK_SHAPE as DEFAULT_MASK_SHAPE,
+    TRW_PATTERN as DEFAULT_PATTERN,
+    TRW_RADIUS as DEFAULT_RADIUS,
+    TRW_REVERSAL_INFERENCE_STEPS as DEFAULT_REVERSAL_INFERENCE_STEPS,
+)
+
+
+class Trw:
+    """
+    The TRW watermarking key. Can be used to generate watermarked images and to extract the watermark.
+    """
+    def __init__(self, reversal_inference_steps=DEFAULT_REVERSAL_INFERENCE_STEPS, channel=DEFAULT_CHANNEL,
+                 pattern=DEFAULT_PATTERN, mask_shape=DEFAULT_MASK_SHAPE, injection_type=DEFAULT_INJECTION_TYPE,
+                 radius=DEFAULT_RADIUS, image_size=DEFAULT_IMAGE_SIZE, x_offset=0, y_offset=0):
+        self.reversal_inference_steps = reversal_inference_steps
+        self.channel = channel
+        self.pattern = pattern
+        self.mask_shape = mask_shape
+        self.injection_type = injection_type
+        self.image_size = image_size
+        self.x_offset = x_offset
+        self.y_offset = y_offset
+        self.radius = radius
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        
+    def sample_message(self, n: int) -> torch.Tensor:
+        """ Sample n random message.
+        """
+        gt_init = torch.randn(*(n, 4, self.image_size, self.image_size),
+                              device=self.device)
+
+        if "random" in self.pattern:
+            message = torch.fft.fftshift(torch.fft.fft2(gt_init), dim=(-1, -2))
+            message[:] = message[0]
+        elif "zeros" in self.pattern:
+            message = torch.fft.fftshift(torch.fft.fft2(gt_init), dim=(-1, -2)) * 0
+        elif "ring" in self.pattern:
+            message = torch.fft.fftshift(torch.fft.fft2(gt_init), dim=(-1, -2))
+            gt_patch_tmp = copy.deepcopy(message)
+            for i in range(self.radius, 0, -1):
+                tmp_mask = self.circle_mask(gt_init.shape[-1], r=i)
+                tmp_mask = torch.tensor(tmp_mask).to(self.device)
+                for j in range(message.shape[1]):
+                    message[:, j, tmp_mask] = gt_patch_tmp[0, j, 0, i].item()
+            return message.to(torch.complex64)  # 1, 4, img, img
+        else:
+            raise ValueError(self.pattern)
+        return message
+
+    
+    @torch.no_grad()
+    def extract(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Extracts an embedded_message from images.
+        @param x should be in [n, c, h, w]
+        """
+        reversed_latents, _ = self.pipe.invert(x)
+        fft_latents = torch.fft.fftshift(
+            torch.fft.fft2(reversed_latents.to(self.device)), dim=(-1, -2)
+        )
+        return fft_latents  # this is the message [b, 4, 64, 64,]
+
+    @torch.no_grad()
+    def decode(self, msg_pred: torch.Tensor, msg_true: torch.Tensor,reversed_latents_no_w_fft) -> dict:
+        """
+        Extracts an embedded_message from images and computes a p-value for the confidence that the embedded
+        and extracted messages are matching.
+        """
+        # non-watermarked messages:
+
+ 
+        watermarking_mask = self.get_watermarking_mask(reversed_latents_no_w_fft)
+
+        no_w_metric, w_metric = [], []
+       
+        return no_w_metric, w_metric
+    
+    def set_message(self, msg: torch.Tensor):
+        real_part = msg.real.float()
+        imaginary_part = msg.imag.float()
+        self.message = torch.stack([real_part, imaginary_part], 0)
+
+    def get_message(self):
+        return torch.complex(self.message[0], self.message[1]).to(
+            self.device)
+
+    def circle_mask(self, size, r=10):
+        x0 = y0 = size // 2
+        x0 += self.x_offset
+        y0 += self.y_offset
+        y, x = np.ogrid[:size, :size]
+        y = y[::-1]
+        return ((x - x0) ** 2 + (y - y0) ** 2) <= r ** 2
+
+    def _inject_watermark(self, init_latents: torch.Tensor, message: torch.Tensor) -> torch.Tensor:
+        """ Injects the watermark into latents.
+        """
+        if message.size(0) != init_latents.size(0):
+            message = message.repeat(len(init_latents), 1, 1, 1)
+
+        watermarking_mask = self.get_watermarking_mask(init_latents)
+
+        init_latents_fft = torch.fft.fftshift(torch.fft.fft2(init_latents.to(torch.complex64)), dim=(-1, -2))
+        if self.injection_type == 'complex':
+            init_latents_fft[watermarking_mask] = message[watermarking_mask].clone()
+        elif self.injection_type == 'seed':
+            init_latents[watermarking_mask] = message.real[watermarking_mask].clone().half()
+            return init_latents
+
+
+        init_latents = torch.fft.ifft2(torch.fft.ifftshift(init_latents_fft, dim=(-1, -2))).real
+        return init_latents.half()
+
+    def get_watermarking_mask(self, init_latents):
+        watermarking_mask = torch.zeros(init_latents.shape, dtype=torch.bool).to(self.device)
+        if self.mask_shape == "circle":
+            np_mask = self.circle_mask(init_latents.shape[-1], r=self.radius)
+            torch_mask = torch.tensor(np_mask).to(self.device)
+
+            if self.channel == -1:
+                # all channels
+                watermarking_mask[:, :] = torch_mask
+            else:
+                watermarking_mask[:, self.channel] = torch_mask
+        elif self.mask_shape == "square":
+            anchor_p = init_latents.shape[-1] // 2
+            if self.channel == -1:
+                # all channels
+                watermarking_mask[
+                :,
+                :,
+                anchor_p - self.radius: anchor_p + self.radius,
+                anchor_p - self.radius: anchor_p + self.radius,
+                ] = True
+            else:
+                watermarking_mask[
+                :,
+                self.channel,
+                anchor_p - self.radius: anchor_p + self.radius,
+                anchor_p - self.radius: anchor_p + self.radius,
+                ] = True
+            
+        return watermarking_mask

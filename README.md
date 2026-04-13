@@ -69,76 +69,84 @@ receives a tailored attack configuration.*
 
 ```
 watermark-analysis/
-|- apply_new_adaptive_attack.py      # Apply a trained adaptive-VAE attack to a folder of images
-|- train_new_adaptive_attack.py      # Fine-tune the SDXL-Refiner VAE against a specific watermark
-|- create_test_dataset.py            # Generate a watermarked test set with SD + a chosen watermark
-|- create_train_data_test.py         # Generate (no-wm, wm, inverse-wm) triplets for attack training
-|- prompts_generator.py              # COCO-caption iterator used as Stable Diffusion prompts
-|- calculate_performance_metrics.py  # Bit-error rate, AUC-ROC, significance thresholds for decoders
-|- calculate_quailty_metrics.py      # LPIPS / MSE / PSNR / SSIM / NMI / FID between two folders
-|- trw_perormance_metrics.py         # Tree-Ring performance helpers
-|- inspect_onnx_operations.py        # Utility to inspect bundled ONNX watermark models
-|- parallel_performance.sh           # Helper for running metric jobs in parallel
-|- parallel_quality.sh
-|
-|- attacks/
-|   |- adv.py          # Embedding models (CLIP / ResNet-18 / KL-VAE) used by the PGD attack
-|   |- adversial.py    # Warm-up PGD attack in embedding space
-|   |- distortion.py   # Classical distortions: rotation, crop, erase, brightness, noise, JPEG, ...
-|   |- regeneration.py # Compressive-VAE (CompressAI) and diffusion-refiner regeneration attacks
-|
-|- watermarks/
-|   |- Rivagan.py                               # RivaGAN encoder/decoder (ONNX)
-|   |- StegaStamp.py                            # StegaStamp encoder/decoder (ONNX)
-|   |- DwtDct.py                                # DWT-DCT and DWT-DCT-SVD watermarks
-|   |- Trw.py                                   # Tree-Ring watermark key
-|   |- TrwStableDiffusion.py                    # Tree-Ring + Stable Diffusion wrapper
-|   |- ModifiedStableDiffusionPipeline.py       # SD pipeline with DDIM inversion support
-|   |- PostProccessingWatermarksStableDiffusion.py  # SD wrapper for post-hoc watermarking schemes
-|
-|- metrics/
-|   |- performance/evasion_rate.py   # BER, complex-L1, detection ROC/AUC helpers
-|   |- quality/                      # Image / perceptual / distributional quality metrics
-|
-|- utils/generate_dataset.py
-|- notebooks/                        # Exploratory notebooks
+|- pyproject.toml                    # Package + console_scripts entry points
+|- README.md
 |- assets/                           # Paper PDF and figures used in this README
-|- coco.json                         # COCO captions used as generation prompts
+|- data/
+|   |- coco.json                     # COCO captions used as generation prompts
+|- notebooks/                        # Exploratory notebooks (trw, test_metrics, ...)
+|- scripts/                          # Thin CLI wrappers (argparse -> package code)
+|   |- generate_prompts.py
+|   |- create_dataset.py             # --split test | attack
+|   |- train_adaptive_attack.py
+|   |- apply_adaptive_attack.py
+|   |- eval_performance.py           # BER, AUC-ROC, significance thresholds
+|   |- eval_quality.py               # LPIPS / MSE / PSNR / SSIM / NMI / FID
+|   |- inspect_onnx.py
+|   |- parallel_performance.sh
+|   |- parallel_quality.sh
+|- src/watermark_analysis/
+|   |- config.py                     # Centralised paths, seeds, model names
+|   |- io.py                         # Image listing / loading helpers
+|   |- prompts.py                    # COCO-caption iterator
+|   |- datasets.py                   # Test / attack dataset generation
+|   |- cli.py                        # Console-script entry points
+|   |- watermarks/                   # Watermark encoders/decoders
+|   |   |- base.py                   # ABC Watermark
+|   |   |- registry.py               # WATERMARKS dict
+|   |   |- dwt_dct.py rivagan.py stegastamp.py
+|   |   |- trw.py trw_stable_diffusion.py
+|   |   |- modified_sd_pipeline.py post_processing_sd.py
+|   |- attacks/                      # Removal attacks
+|   |   |- base.py registry.py
+|   |   |- distortion.py regeneration.py adversarial.py
+|   |   |- adaptive/                 # VAE attack (model / train / apply)
+|   |- metrics/
+|       |- performance.py            # BER / AUC / detection ROC helpers
+|       |- quality/                  # image, perceptual, distributional, folder compare
 ```
 
 ## Installation
 
-The code targets Python 3.10+ and CUDA-enabled PyTorch. Core dependencies:
+The code targets Python 3.10+ and CUDA-enabled PyTorch.
 
-```
-torch torchvision diffusers transformers
-onnxruntime-gpu pywavelets opencv-python
-scikit-image scikit-learn scipy lpips
-pytorch-fid compressai
-pandas tqdm matplotlib wandb pillow
+```bash
+pip install -e .
 ```
 
-The RivaGAN and StegaStamp watermark encoders rely on ONNX model files
-placed under `watermarks/` (`rivagan_encoder.onnx`, `rivagan_decoder.onnx`,
-`stega_stamp.onnx`).
+Dependencies are declared in `pyproject.toml` (torch, torchvision,
+diffusers, transformers, onnxruntime, opencv-python, Pillow, numpy, pandas,
+tqdm, wandb, scikit-learn, scikit-image, scipy, lpips, clean-fid,
+pytorch-fid, pywavelets, compressai, matplotlib).
+
+The RivaGAN and StegaStamp encoders rely on ONNX model files
+(`rivagan_encoder.onnx`, `rivagan_decoder.onnx`, `stega_stamp.onnx`). Place
+them under `watermarks/` at the repo root, or set `WATERMARK_ONNX_DIR` to
+their containing directory.
+
+After `pip install -e .` the following console scripts become available:
+`wm-create-dataset`, `wm-train-adaptive`, `wm-apply-adaptive`,
+`wm-eval-performance`, `wm-eval-quality`, `wm-inspect-onnx`,
+`wm-generate-prompts`. Each is equivalent to running the matching file
+under `scripts/` with `python`.
 
 ## Usage
 
 ### 1. Generate a watermarked test dataset
 
 ```bash
-python create_test_dataset.py
+python scripts/create_dataset.py --split test --watermark dwtdctsvd
 ```
 
-By default this creates 1024 watermarked images (batch size 16) under
+Creates 1024 watermarked images (batch size 16) under
 `cache/test_dataset_<algorithm>/` with a `messages.csv` mapping each image
-to its embedded bit-string. Edit the call at the bottom of the script to
-change the algorithm (`rivagan`, `dwtdct`, `dwtdctsvd`, `stegastamp`, `trw`).
+to its embedded bit-string. Supported algorithms:
+`rivagan`, `dwtdct`, `dwtdctsvd`, `stegastamp`, `trw`.
 
 ### 2. Generate paired attack-training data
 
 ```bash
-python create_train_data_test.py
+python scripts/create_dataset.py --split attack --watermark dwtdct
 ```
 
 Produces triplets `(no_watermark, watermark, inverse_watermark)` under
@@ -147,52 +155,56 @@ Produces triplets `(no_watermark, watermark, inverse_watermark)` under
 ### 3. Train the adaptive VAE attack
 
 ```bash
-python train_new_adaptive_attack.py
+python scripts/train_adaptive_attack.py \
+    --cache-dir cache/attack_dataset_dwtdct \
+    --mode no_watermark --alpha 1 --beta 0
 ```
 
 Fine-tunes an `AutoencoderKL` (SDXL-Refiner VAE) with an LPIPS + MSE loss
 to map watermarked inputs to clean / inverse-watermarked targets. Runs log
-to W&B and checkpoints are written under `training_runs/run_<timestamp>/`.
+to W&B; checkpoints land under `training_runs/run_<timestamp>/`.
 
 ### 4. Apply the trained attack to new images
 
 ```bash
-python apply_new_adaptive_attack.py \
-    --input_folder path/to/watermarked \
-    --output_folder path/to/attacked \
-    --vae_path training_runs/run_<timestamp>/models/best_model.pth
+python scripts/apply_adaptive_attack.py \
+    --input-folder path/to/watermarked \
+    --output-folder path/to/attacked \
+    --vae-path training_runs/run_<timestamp>/models/best_model.pth
 ```
 
 ### 5. Other attacks
 
-```bash
-# Classical distortions
-python attacks/distortion.py --input_dir path/to/watermarked --output_dir path/to/distorted
+Distortion, regeneration, and adversarial PGD attacks are importable from
+`watermark_analysis.attacks`:
 
-# Embedding-space PGD (edit in-file paths and call at bottom)
-python attacks/adversial.py
-
-# Regeneration via learned compressors / diffusion refiner (edit paths in-file)
-python attacks/regeneration.py
+```python
+from watermark_analysis.attacks import (
+    DistortionAttacks, VAEAttack, DiffuserAttack, adv_emb_attack,
+)
 ```
+
+`DistortionAttacks().process_directory(src, dst)` applies each distortion
+type under `DEFAULT_DISTORTION_STRENGTHS`; `adv_emb_attack(src, encoder,
+strength, dst)` runs the warm-up PGD embedding attack.
 
 ### 6. Evaluate
 
 ```bash
 # Watermark-decoding performance (BER, AUC, significance thresholds)
-python calculate_performance_metrics.py \
+python scripts/eval_performance.py \
     --images_path path/to/attacked \
     --csv_path cache/test_dataset_<algorithm> \
     --algorithm <rivagan|stegastamp|dwtdct|dwtdctsvd>
 
 # Image-quality metrics (LPIPS / MSE / PSNR / SSIM / NMI / FID)
-python calculate_quailty_metrics.py \
+python scripts/eval_quality.py \
     --ref_folder path/to/watermarked \
     --target_folder path/to/attacked
 ```
 
-Parallel wrappers are provided in `parallel_performance.sh` and
-`parallel_quality.sh`.
+Parallel wrappers are provided in `scripts/parallel_performance.sh` and
+`scripts/parallel_quality.sh`.
 
 ## Citation
 
