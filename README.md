@@ -18,12 +18,12 @@ trade-off between watermark removal and perceptual fidelity.
 Our pipeline secured first place in both the **black-box** and **beige-box**
 tracks of the challenge.
 
-![Final leaderboard for the black-box and beige-box tracks.](assets/Screenshot%202026-04-14%20021159.png)
+![Final leaderboard for the black-box and beige-box tracks.](assets/leaderboard.png)
 
 *Final leaderboard: Team-MBZUAI ranks first in both tracks of the NeurIPS 2024
 Erasing the Invisible challenge.*
 
-![Side-by-side of original watermarked images (top) and our attacked outputs (bottom).](assets/Screenshot%202026-04-14%20021211.png)
+![Side-by-side of original watermarked images (top) and our attacked outputs (bottom).](assets/attack_comparison.png)
 
 *Qualitative results: top row shows original watermarked images, bottom row
 shows images after our removal attack. Perceptual fidelity is preserved while
@@ -40,7 +40,7 @@ map a watermarked input to its inverse-watermarked counterpart under an MSE
 loss. This is followed by per-image test-time optimization (LPIPS + SSIM
 losses) and CIELAB color/contrast transfer to restore visual quality.
 
-![Dataset-generation and VAE-finetuning pipeline for StegaStamp removal.](assets/Screenshot%202026-04-14%20021219.png)
+![Dataset-generation and VAE-finetuning pipeline for StegaStamp removal.](assets/stegastamp_pipeline.png)
 
 *Overview of the dataset-generation (paired watermarked / inverse-watermarked
 images) and VAE fine-tuning stages of the beige-box attack.*
@@ -52,13 +52,13 @@ frequency-domain artifacts, and a cluster-specific removal strategy is
 applied. The main component is an image-to-image diffusion attack using the
 Stable Diffusion Refiner with ChatGPT-generated semantic captions.
 
-![Image-to-image diffusion pipeline with semantic prompts from ChatGPT.](assets/Screenshot%202026-04-14%20021231.png)
+![Image-to-image diffusion pipeline with semantic prompts from ChatGPT.](assets/img2img_pipeline.png)
 
 *Diffusion-based regeneration pipeline: the watermarked image is encoded,
 forward-diffused, and denoised by the UNet conditioned on a ChatGPT-generated
 caption describing the original content.*
 
-![Four clusters discovered in black-box watermarked images.](assets/Screenshot%202026-04-14%20021239.png)
+![Four clusters discovered in black-box watermarked images.](assets/blackbox_clusters.png)
 
 *Cluster analysis for the black-box track: images fall into four groups
 based on spatial artifacts and Fourier-magnitude signatures (no artifacts,
