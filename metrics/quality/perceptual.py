@@ -1,19 +1,24 @@
 import torch
-import numpy as np
 from PIL import Image
-from tqdm.auto import tqdm
+
 from utils import to_tensor
+
 from .lpips import LPIPS
 from .watson import LossProvider
 
+# Module-level constants
+SUPPORTED_METRICS = ("lpips", "watson")
+LPIPS_MODES = ("vgg", "alex")
+WATSON_MODES = ("vgg", "dft", "fft")
+
 
 def load_perceptual_models(metric_name, mode, device=torch.device("cuda")):
-    assert metric_name in ["lpips", "watson"]
+    assert metric_name in SUPPORTED_METRICS
     if metric_name == "lpips":
-        assert mode in ["vgg", "alex"]
+        assert mode in LPIPS_MODES
         perceptual_model = LPIPS(net=mode).to(device)
     elif metric_name == "watson":
-        assert mode in ["vgg", "dft", "fft"]
+        assert mode in WATSON_MODES
         perceptual_model = (
             LossProvider()
             .get_loss_function(

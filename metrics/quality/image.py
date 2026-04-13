@@ -1,15 +1,16 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 import torch
 from PIL import Image
 from skimage.metrics import (
     mean_squared_error,
+    normalized_mutual_information,
     peak_signal_noise_ratio,
     structural_similarity as structural_similarity_index_measure,
-    normalized_mutual_information,
 )
 from tqdm.auto import tqdm
-from concurrent.futures import ThreadPoolExecutor
 
 
 # Process images to numpy arrays

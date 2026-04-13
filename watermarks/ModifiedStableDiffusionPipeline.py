@@ -1,10 +1,13 @@
-from typing import Callable, List, Optional, Union, Dict, Any
-import PIL
+from typing import Any, Callable, Dict, List, Optional, Union
+
 import torch
 from diffusers import StableDiffusionPipeline
-from diffusers.callbacks import PipelineCallback, MultiPipelineCallbacks
+from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
 from diffusers.image_processor import PipelineImageInput
-from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import retrieve_timesteps, rescale_noise_cfg
+from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
+    rescale_noise_cfg,
+    retrieve_timesteps,
+)
 from diffusers.utils.torch_utils import randn_tensor
 
 

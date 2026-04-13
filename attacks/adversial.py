@@ -1,31 +1,39 @@
 import os
-from PIL import Image
+
 import torch
+import torchvision.transforms as transforms
+from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision.utils import save_image
-import torchvision.transforms as transforms
+from tqdm import tqdm
+
 from adv import (
+    ClipEmbedding,
     ResNet18Embedding,
     VAEEmbedding,
-    ClipEmbedding,
 )
-import os
-from tqdm import tqdm
-from glob import glob
+
+# Module-level constants
 EPS_FACTOR = 1 / 255
 ALPHA_FACTOR = 0.05
 N_STEPS = 200
 BATCH_SIZE = 256
+DEFAULT_NUM_WORKERS = 24
+DEFAULT_EPS = 8 / 255
+DEFAULT_ALPHA = 2 / 255
+PNG_EXT = ".png"
+
+
 class WarmupPGDEmbedding:
     def __init__(
         self,
         model,
         device,
-        eps=8 / 255,
-        alpha=2 / 255,
-        steps=10,
-        loss_type="l2",
-        random_start=True,
+        eps: float = DEFAULT_EPS,
+        alpha: float = DEFAULT_ALPHA,
+        steps: int = 10,
+        loss_type: str = "l2",
+        random_start: bool = True,
     ):
         self.model = model
         self.eps = eps
@@ -83,6 +91,19 @@ class WarmupPGDEmbedding:
             adv_images = torch.clamp(images + delta, min=0, max=1).detach()
 
         return adv_images
+
+
+def _build_embedding_model(encoder: str):
+    if encoder == "resnet18":
+        # we use last layer's state as the embedding
+        return ResNet18Embedding("last")
+    if encoder == "clip":
+        return ClipEmbedding()
+    if encoder == "klvae16":
+        return VAEEmbedding("MudeHui/vae-f16-c16")
+    raise ValueError(f"Unsupported encoder: {encoder}")
+
+
 def adv_emb_attack(
     wm_img_path, encoder, strength, output_path, device=torch.device("cuda")
 ):
@@ -93,16 +114,7 @@ def adv_emb_attack(
             raise FileNotFoundError(f"The path does not exist: {path}")
 
     # load embedding model
-    if encoder == "resnet18":
-        # we use last layer's state as the embedding
-        embedding_model = ResNet18Embedding("last")
-    elif encoder == "clip":
-        embedding_model = ClipEmbedding()
-    elif encoder == "klvae16":
-        embedding_model = VAEEmbedding("MudeHui/vae-f16-c16")
-    else:
-        raise ValueError(f"Unsupported encoder: {encoder}")
-    embedding_model = embedding_model.to(device)
+    embedding_model = _build_embedding_model(encoder).to(device)
     embedding_model.eval()
     print("Embedding Model loaded!")
 
@@ -110,7 +122,7 @@ def adv_emb_attack(
     transform = transforms.ToTensor()
     wm_dataset = SimpleImageFolder(wm_img_path, transform=transform)
     wm_loader = DataLoader(
-        wm_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=24, pin_memory=True
+        wm_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=DEFAULT_NUM_WORKERS, pin_memory=True
     )
     print("Data loaded!")
 
@@ -122,7 +134,6 @@ def adv_emb_attack(
         steps=N_STEPS,
         device=device,
     )
-    from tqdm import tqdm
     # Generate adversarial images
     for i, (images, image_paths) in tqdm(enumerate(wm_loader)):
         images = images.to(device)
@@ -149,7 +160,7 @@ class SimpleImageFolder(Dataset):
             os.path.join(root, f)
             for f in os.listdir(root)
             if os.path.isfile(os.path.join(root, f))
-            and os.path.splitext(f)[1].lower() in ".png"
+            and os.path.splitext(f)[1].lower() in PNG_EXT
         ]
 
     def __getitem__(self, index):
@@ -162,6 +173,12 @@ class SimpleImageFolder(Dataset):
     def __len__(self):
         return len(self.filenames)
 
-for attack in ['clip','resnet18']:	
+
+for attack in ['clip', 'resnet18']:
     for watermark in ['dwtdct']:
-        adv_emb_attack(f'/ephemeral/tbakr/watermark-analysis/cache/test_dataset_{watermark}', attack, 4, f'/ephemeral/tbakr/watermark-analysis/attacked/test_dataset_{watermark}_{attack}')
+        adv_emb_attack(
+            f'/ephemeral/tbakr/watermark-analysis/cache/test_dataset_{watermark}',
+            attack,
+            4,
+            f'/ephemeral/tbakr/watermark-analysis/attacked/test_dataset_{watermark}_{attack}',
+        )

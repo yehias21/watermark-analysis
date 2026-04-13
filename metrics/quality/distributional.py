@@ -1,12 +1,16 @@
 import os
 import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+
 import torch
 from PIL import Image
 from tqdm.auto import tqdm
-from concurrent.futures import ProcessPoolExecutor
-from functools import partial
-from PIL import Image
+
 from .clean_fid import fid
+
+# Module-level constants
+SUPPORTED_FID_MODES = ("legacy", "clean", "clip")
 
 
 def save_single_image_to_temp(i, image, temp_dir):
@@ -43,7 +47,7 @@ def compute_fid(
     verbose=False,
 ):
     # Support four types of FID scores
-    assert mode in ["legacy", "clean", "clip"]
+    assert mode in SUPPORTED_FID_MODES
     if mode == "legacy":
         mode = "legacy_pytorch"
         model_name = "inception_v3"

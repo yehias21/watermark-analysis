@@ -1,13 +1,20 @@
-import numpy as np
 import cv2
-from PIL import Image
+import numpy as np
 import pywt
+from PIL import Image
+
+# Module-level constants
+DEFAULT_SCALES = [0, 36, 36]
+DEFAULT_BLOCK = 4
+MESSAGE_LENGTH = 32
+NUM_CHANNELS = 2  # Only process two of the YUV channels
+THRESHOLD = 127
 
 
 class DwtDCT:
-    def __init__(self, use_svd=False):
-        self._scales = [0, 36, 36]
-        self._block = 4
+    def __init__(self, use_svd: bool = False):
+        self._scales = list(DEFAULT_SCALES)
+        self._block = DEFAULT_BLOCK
         self._use_svd = use_svd
 
     def encode(self, images, watermarks):
@@ -64,15 +71,17 @@ class DwtDCT:
         """
         (row, col, channels) = bgr.shape
         yuv = cv2.cvtColor(bgr, cv2.COLOR_BGR2YUV)
+        row_limit = row // 4 * 4
+        col_limit = col // 4 * 4
 
-        for channel in range(2):
+        for channel in range(NUM_CHANNELS):
             if self._scales[channel] <= 0:
                 continue
 
-            ca1, (h1, v1, d1) = pywt.dwt2(yuv[:row // 4 * 4, :col // 4 * 4, channel], 'haar')
+            ca1, (h1, v1, d1) = pywt.dwt2(yuv[:row_limit, :col_limit, channel], 'haar')
             self.encode_frame(ca1, watermark, self._scales[channel])
 
-            yuv[:row // 4 * 4, :col // 4 * 4, channel] = pywt.idwt2((ca1, (v1, h1, d1)), 'haar')
+            yuv[:row_limit, :col_limit, channel] = pywt.idwt2((ca1, (v1, h1, d1)), 'haar')
 
         bgr_encoded = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
         return bgr_encoded
@@ -89,53 +98,56 @@ class DwtDCT:
         """
         (row, col, channels) = bgr.shape
         yuv = cv2.cvtColor(bgr, cv2.COLOR_BGR2YUV)
+        row_limit = row // 4 * 4
+        col_limit = col // 4 * 4
 
-        scores = [[] for _ in range(32)]
-        for channel in range(2):
+        scores = [[] for _ in range(MESSAGE_LENGTH)]
+        for channel in range(NUM_CHANNELS):
             if self._scales[channel] <= 0:
                 continue
 
-            ca1, (h1, v1, d1) = pywt.dwt2(yuv[:row // 4 * 4, :col // 4 * 4, channel], 'haar')
+            ca1, (h1, v1, d1) = pywt.dwt2(yuv[:row_limit, :col_limit, channel], 'haar')
             scores = self.decode_frame(ca1, self._scales[channel], scores)
 
         avgScores = list(map(lambda l: np.array(l).mean(), scores))
-        bits = (np.array(avgScores) * 255 > 127).astype(int)
+        bits = (np.array(avgScores) * 255 > THRESHOLD).astype(int)
         return bits
 
     def encode_frame(self, frame, watermark, scale):
         (row, col) = frame.shape
+        block = self._block
         num = 0
-        for i in range(row // self._block):
-            for j in range(col // self._block):
-                block = frame[i * self._block: i * self._block + self._block,
-                              j * self._block: j * self._block + self._block]
-                wmBit = watermark[num % 32]
+        for i in range(row // block):
+            for j in range(col // block):
+                i0, j0 = i * block, j * block
+                sub_block = frame[i0: i0 + block, j0: j0 + block]
+                wmBit = watermark[num % MESSAGE_LENGTH]
 
                 if self._use_svd:
-                    diffusedBlock = self.diffuse_dct_svd(block, wmBit, scale)
+                    diffusedBlock = self.diffuse_dct_svd(sub_block, wmBit, scale)
                 else:
-                    diffusedBlock = self.diffuse_dct_matrix(block, wmBit, scale)
+                    diffusedBlock = self.diffuse_dct_matrix(sub_block, wmBit, scale)
 
-                frame[i * self._block: i * self._block + self._block,
-                      j * self._block: j * self._block + self._block] = diffusedBlock
+                frame[i0: i0 + block, j0: j0 + block] = diffusedBlock
 
                 num += 1
 
     def decode_frame(self, frame, scale, scores):
         (row, col) = frame.shape
+        block = self._block
         num = 0
 
-        for i in range(row // self._block):
-            for j in range(col // self._block):
-                block = frame[i * self._block: i * self._block + self._block,
-                              j * self._block: j * self._block + self._block]
+        for i in range(row // block):
+            for j in range(col // block):
+                i0, j0 = i * block, j * block
+                sub_block = frame[i0: i0 + block, j0: j0 + block]
 
                 if self._use_svd:
-                    score = self.infer_dct_svd(block, scale)
+                    score = self.infer_dct_svd(sub_block, scale)
                 else:
-                    score = self.infer_dct_matrix(block, scale)
+                    score = self.infer_dct_matrix(sub_block, scale)
 
-                wmBit = num % 32
+                wmBit = num % MESSAGE_LENGTH
                 scores[wmBit].append(score)
                 num += 1
 
@@ -160,7 +172,7 @@ class DwtDCT:
         if val < 0:
             val = abs(val)
 
-        return (val % scale)/ scale
+        return (val % scale) / scale
 
     def diffuse_dct_svd(self, block, wmBit, scale):
         u, s, v = np.linalg.svd(cv2.dct(block))
@@ -169,4 +181,4 @@ class DwtDCT:
 
     def infer_dct_svd(self, block, scale):
         u, s, v = np.linalg.svd(cv2.dct(block))
-        return (s[0] % scale) / scale 
+        return (s[0] % scale) / scale

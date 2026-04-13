@@ -1,14 +1,25 @@
 import copy
-import random
+
 import numpy as np
 import torch
+
+# Module-level constants
+DEFAULT_REVERSAL_INFERENCE_STEPS = 20
+DEFAULT_CHANNEL = -1
+DEFAULT_PATTERN = 'ring'
+DEFAULT_MASK_SHAPE = 'circle'
+DEFAULT_INJECTION_TYPE = 'complex'
+DEFAULT_RADIUS = 10
+DEFAULT_IMAGE_SIZE = 64
 
 
 class Trw:
     """
     The TRW watermarking key. Can be used to generate watermarked images and to extract the watermark.
     """
-    def __init__(self,reversal_inference_steps = 20, channel=-1, pattern='ring', mask_shape='circle', injection_type='complex',radius=10 , image_size=64 ,x_offset=0, y_offset=0):
+    def __init__(self, reversal_inference_steps=DEFAULT_REVERSAL_INFERENCE_STEPS, channel=DEFAULT_CHANNEL,
+                 pattern=DEFAULT_PATTERN, mask_shape=DEFAULT_MASK_SHAPE, injection_type=DEFAULT_INJECTION_TYPE,
+                 radius=DEFAULT_RADIUS, image_size=DEFAULT_IMAGE_SIZE, x_offset=0, y_offset=0):
         self.reversal_inference_steps = reversal_inference_steps
         self.channel = channel
         self.pattern = pattern
